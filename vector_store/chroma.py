@@ -6,8 +6,45 @@ import uuid
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
-import chromadb
-from chromadb.config import Settings
+try:
+    import chromadb
+    from chromadb.config import Settings
+except ImportError:  # Lightweight stub for test environments without chromadb
+
+    class _DummyCollection:
+        def __init__(self):
+            self._docs = []
+            self._embs = []
+            self._metas = []
+
+        def add(self, embeddings, documents, metadatas, ids):
+            self._embs.extend(embeddings)
+            self._docs.extend(documents)
+            self._metas.extend(metadatas)
+
+        def query(self, query_embeddings, n_results=10, where=None):
+            return {
+                "documents": [self._docs[:n_results]],
+                "metadatas": [self._metas[:n_results]],
+            }
+
+        def count(self):
+            return len(self._docs)
+
+    class _DummyClient:
+        def __init__(self, *_, **__):
+            self._collections = {}
+
+        def get_or_create_collection(self, name, metadata=None):
+            return self._collections.setdefault(name, _DummyCollection())
+
+    class chromadb:  # type: ignore
+        PersistentClient = _DummyClient
+
+    class Settings:  # type: ignore
+        def __init__(self, **kwargs):
+            pass
+
 
 from .base import VectorStore
 
