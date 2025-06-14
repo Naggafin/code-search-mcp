@@ -26,9 +26,12 @@ def _lazy_search_engine():
     return _se
 
 
+from .utils import sse_event
+
 __all__ = [
     "Indexer",
     "Searcher",
+    "sse_event",
     "__version__",
 ]
 
@@ -106,3 +109,30 @@ class Searcher:
             max_tokens=max_tokens,
             metadata_filter=metadata_filter,
         )
+
+    # ----------------------------------------------------------------- Streaming
+    def stream_context(
+        self,
+        query: str,
+        *,
+        k: int = 5,
+        max_tokens: int = 8000,
+        metadata_filter: Optional[dict[str, Any]] = None,
+    ):
+        """Yield Server-Sent Events for a context request.
+
+        Currently emits a single ``result`` event followed by ``end``. Can be
+        extended to chunk-level streaming without breaking contract.
+        """
+        from .utils import sse_event
+
+        result = self.context(
+            query,
+            k=k,
+            max_tokens=max_tokens,
+            metadata_filter=metadata_filter,
+        )
+        # full payload first
+        yield sse_event("result", result)
+        # terminal event so clients know the stream is complete
+        yield sse_event("end", {"status": "done"})

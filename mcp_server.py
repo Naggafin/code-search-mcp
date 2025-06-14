@@ -2,7 +2,9 @@ import logging
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.requests import Request
 
 from auth import verify_api_key
 from config import settings
@@ -57,6 +59,9 @@ class ContextResponse(BaseModel):
     metadata: list[dict]
     tokens: int
     status: str
+
+
+from starlette.requests import Request
 
 
 class SearchResponse(BaseModel):
@@ -134,6 +139,56 @@ async def search_context(
             "status": "success",
         }
     except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
+
+
+@app.get(
+    "/mcp/v1/context/stream",
+    tags=["Context"],
+    summary="Stream code context via Server-Sent Events",
+    description="SSE endpoint that streams context results in real-time.",
+)
+async def stream_context(
+    request: Request,
+    query: str,
+    max_tokens: int = 8000,
+    metadata_filter: str | None = None,
+    api_key: str = Depends(verify_api_key),
+):
+    """Return a *text/event-stream* response.
+
+    Emits two events by default:
+    1. **result** – full search payload
+    2. **end** – terminator so clients know the stream is finished
+    """
+
+    try:
+        meta_dict: dict | None = None
+        if metadata_filter:
+            import json
+
+            meta_dict = json.loads(metadata_filter)
+        gen = searcher.stream_context(
+            query,
+            k=5,
+            max_tokens=max_tokens,
+            metadata_filter=meta_dict,
+        )
+
+        async def event_generator():
+            for event_str in gen:
+                yield event_str
+                if await request.is_disconnected():
+                    break
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+    except Exception as e:
+        logger.error(f"Stream context failed: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Stream context failed: {e}"
+        ) from e
+
         logger.error(f"Search failed: {e}")
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
 
