@@ -1,67 +1,158 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional, Union, List
 
 import libcst as cst
-import magic
+from libcst import metadata as _cst_meta
+# Optional libmagic support
+try:
+    import magic  # type: ignore
+    _magic = magic.Magic(mime=True)  # type: ignore
+except ImportError:  # pragma: no cover
+    _magic = None
 import pathspec
 
+# Optional tree-sitter support
+try:
+    from tree_sitter_languages import get_parser  # type: ignore
+
+    TS_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    TS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+# Helper to get mime type if libmagic available
 
-MIME = magic.Magic(mime=True)
+def _get_mime(path: Path) -> str:
+    if _magic is None:
+        return ""
+    try:
+        return _magic.from_file(str(path))
+    except Exception:
+        return ""
 
 
-def extract_code_chunks(code, file_path):
-    class CodeVisitor(cst.CSTVisitor):
-        def __init__(self):
-            self.chunks = []
-            self.current_line = 1
 
-        def visit_FunctionDef(self, node):
-            chunk = node.code
-            name = node.name.value
-            start_line = node.get_metadata(
-                cst.MetadataWrapper(node).position
-            ).start.line
-            self.chunks.append(
-                {
-                    "text": chunk,
-                    "metadata": {
-                        "type": "function",
-                        "name": name,
-                        "start_line": start_line,
-                        "end_line": start_line + len(chunk.splitlines()),
-                    },
-                }
-            )
 
-        def visit_ClassDef(self, node):
-            chunk = node.code
-            name = node.name.value
-            start_line = node.get_metadata(
-                cst.MetadataWrapper(node).position
-            ).start.line
-            self.chunks.append(
-                {
-                    "text": chunk,
-                    "metadata": {
-                        "type": "class",
-                        "name": name,
-                        "start_line": start_line,
-                        "end_line": start_line + len(chunk.splitlines()),
-                    },
-                }
-            )
+# ---------------------------------------------------------------------------
+# Python (libcst) extraction -------------------------------------------------
+
+class _PyVisitor(cst.CSTVisitor):
+    METADATA_DEPENDENCIES = (_cst_meta.PositionProvider,)
+
+    def __init__(self, lines: List[str]):
+        self._lines = lines
+        self.chunks: list[dict] = []
+        self._class_depth = 0
+
+    def _add(self, node: cst.CSTNode, typ: str, name: str):
+        pos = self.get_metadata(_cst_meta.PositionProvider, node)
+        start, end = pos.start.line, pos.end.line
+        text = "\n".join(self._lines[start - 1 : end])
+        self.chunks.append(
+            {
+                "text": text,
+                "metadata": {
+                    "type": typ,
+                    "name": name,
+                    "start_line": start,
+                    "end_line": end,
+                },
+            }
+        )
+
+    def visit_ClassDef(self, node: cst.ClassDef):
+        self._add(node, "class", node.name.value)
+        self._class_depth += 1
+
+    def leave_ClassDef(self, _node: cst.ClassDef):
+        self._class_depth -= 1
+
+    def visit_FunctionDef(self, node: cst.FunctionDef):
+        if self._class_depth:
+            return False  # skip methods; included in class chunk
+        self._add(node, "function", node.name.value)
+
+
+def _extract_python(code: str) -> list[dict]:
+    """Chunk python *code* using libcst."""
+    try:
+        module = cst.parse_module(code)
+        wrapper = cst.MetadataWrapper(module)
+        visitor = _PyVisitor(code.splitlines())
+        wrapper.visit(visitor)
+        return visitor.chunks
+    except Exception as exc:  # pragma: no cover
+        logger.debug("libcst failed: %s", exc)
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Tree-sitter extraction -----------------------------------------------------
+
+SUPPORTED_LANGS = {
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".go": "go",
+    ".java": "java",
+}
+
+LANG_NODE_TYPES = {
+    "javascript": ["function_declaration", "method_definition", "class_declaration"],
+    "typescript": ["function_declaration", "method_definition", "class_declaration"],
+    "go": ["function_declaration", "method_declaration"],
+    "java": ["method_declaration", "class_declaration"],
+}
+
+
+def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
+    if not TS_AVAILABLE:
+        return []
+
+    lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
+    if not lang:
+        return []
 
     try:
-        tree = cst.parse_module(code)
-        visitor = CodeVisitor()
-        tree.visit(visitor)
-        chunks = visitor.chunks
-    except Exception:
-        chunks = []
+        parser = get_parser(lang)
+        tree = parser.parse(code.encode())
+    except Exception as exc:  # pragma: no cover
+        logger.debug("tree-sitter parse failed for %s: %s", file_path, exc)
+        return []
 
-    # Fallback for non-Python or unparsable files
+    chunks: list[dict] = []
+    for node in tree.root_node.walk():
+        if node.type not in LANG_NODE_TYPES[lang]:
+            continue
+        start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
+        text = code[node.start_byte : node.end_byte]
+        name_node = node.child_by_field_name("name")
+        name = name_node.text.decode() if name_node else "<anon>"
+        chunks.append(
+            {
+                "text": text,
+                "metadata": {
+                    "type": node.type,
+                    "name": name,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                },
+            }
+        )
+    return chunks
+
+# ---------------------------------------------------------------------------
+# Public API ----------------------------------------------------------------
+
+def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
+    """Return list of code chunks extracted from *file_path* contents."""
+    chunks: list[dict] = []
+    if file_path.suffix == ".py":
+        chunks = _extract_python(code)
+    if not chunks:
+        chunks = _extract_tree_sitter(code, file_path)
     if not chunks:
         lines = code.splitlines()
         chunks = [
@@ -75,7 +166,6 @@ def extract_code_chunks(code, file_path):
                 },
             }
         ]
-
     return chunks
 
 
@@ -114,25 +204,20 @@ def load_gitignore_patterns(project_path: Path) -> pathspec.PathSpec:
 
 
 def is_text_file(file_path: Path) -> bool:
-    """Determine if a file is likely to be a text file using MIME and content heuristics."""
-    try:
-        mime_type = MIME.from_file(str(file_path))
-        if mime_type.startswith("text/"):
-            return True
-        # Accept some source code MIME types
-        if mime_type.startswith(("application/json", "application/xml")):
-            return True
-    except Exception as e:
-        logger.warning(f"Failed to get MIME type for {file_path}: {e}")
+    """Heuristic: use libmagic when available else fallback to null-byte sniff."""
+    mime_type = _get_mime(file_path)
+    if mime_type.startswith("text/") or mime_type.startswith(
+        ("application/json", "application/xml")
+    ):
+        return True
 
-    # Fallback: check for null bytes
     try:
         with file_path.open("rb") as f:
             sample = f.read(2048)
             if b"\x00" in sample:
                 return False
     except Exception as e:
-        logger.warning(f"Failed to read file {file_path} for binary check: {e}")
+        logger.debug("binary check failed on %s: %s", file_path, e)
         return False
 
     return True

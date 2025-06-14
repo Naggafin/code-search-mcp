@@ -1,107 +1,39 @@
-import uuid
+"""Deprecated compatibility shim – use `vector_store.chroma` instead."""
+from __future__ import annotations
+
+import warnings
 from pathlib import Path
+from typing import Iterable, List, Tuple
 
-import chromadb
-from chromadb.config import Settings
+from vector_store.chroma import ChromaVectorStore
 
-DB_PATH = Path("./.chroma_db")
-DB_PATH.mkdir(exist_ok=True)
-
-client = chromadb.PersistentClient(
-    path=str(DB_PATH), settings=Settings(allow_reset=True)
+warnings.warn(
+    "Importing 'vector_store' is deprecated; use 'vector_store.chroma' instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
-# Initialize two collections for different embedding models
-code_collection = client.get_or_create_collection(
-    name="code_collection", metadata={"hnsw:space": "cosine"}
-)
-text_collection = client.get_or_create_collection(
-    name="text_collection", metadata={"hnsw:space": "cosine"}
-)
+# Singleton backing store
+_store = ChromaVectorStore()
+
+# re-export collections for callers that access them directly
+code_collection = _store._code  # type: ignore[attr-defined]
+text_collection = _store._text  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# Legacy function wrappers ---------------------------------------------------
+# ---------------------------------------------------------------------------
+
+def add_chunks(
+    chunks: Iterable[Tuple[Path, dict]],
+    embeddings: List[List[float]],
+    batch_size: int = 100,
+) -> None:
+    _store.add(chunks, embeddings, batch_size=batch_size)
 
 
-def add_chunks(chunks, embeddings, batch_size=100):
-    code_embs = []
-    code_docs = []
-    code_metas = []
-    code_ids = []
-
-    text_embs = []
-    text_docs = []
-    text_metas = []
-    text_ids = []
-
-    for (path, chunk), emb in zip(chunks, embeddings, strict=False):
-        metadata = chunk["metadata"]
-        metadata["path"] = str(path)
-        metadata["mcp_id"] = str(uuid.uuid4())
-        metadata["source"] = "codebase"
-
-        doc = chunk["text"]
-        model = metadata.get("model", "codebert-base")  # Default to codebert
-
-        if model == "codebert-base":
-            code_embs.append(emb)
-            code_docs.append(doc)
-            code_metas.append(metadata)
-            code_ids.append(metadata["mcp_id"])
-        else:
-            text_embs.append(emb)
-            text_docs.append(doc)
-            text_metas.append(metadata)
-            text_ids.append(metadata["mcp_id"])
-
-    # Add to code collection
-    if code_embs:
-        for i in range(0, len(code_embs), batch_size):
-            code_collection.add(
-                embeddings=code_embs[i : i + batch_size],
-                documents=code_docs[i : i + batch_size],
-                metadatas=code_metas[i : i + batch_size],
-                ids=code_ids[i : i + batch_size],
-            )
-
-    # Add to text collection
-    if text_embs:
-        for i in range(0, len(code_embs), batch_size):
-            text_collection.add(
-                embeddings=text_embs[i : i + batch_size],
-                documents=text_docs[i : i + batch_size],
-                metadatas=text_metas[i : i + batch_size],
-                ids=text_ids[i : i + batch_size],
-            )
-
-
-def query(query_text, embed_fn, k=10, where=None):
+def query(query_text: str, embed_fn, k: int = 10, where: dict | None = None):
     query_emb = embed_fn([query_text])[0]
+    return _store.query(query_emb, k=k, where=where)
 
-    # Query both collections
-    code_results = (
-        code_collection.query(query_embeddings=[query_emb], n_results=k, where=where)
-        if code_collection.count() > 0
-        else {"documents": [[]], "metadatas": [[]]}
-    )
 
-    text_results = (
-        text_collection.query(query_embeddings=[query_emb], n_results=k, where=where)
-        if text_collection.count() > 0
-        else {"documents": [[]], "metadatas": [[]]}
-    )
-
-    # Combine results
-    documents = code_results["documents"][0] + text_results["documents"][0]
-    metadatas = code_results["metadatas"][0] + text_results["metadatas"][0]
-
-    # Sort by distance (if available) and limit to k
-    if documents:
-        combined = sorted(
-            [
-                (doc, meta)
-                for doc, meta in zip(documents, metadatas, strict=False)
-                if doc
-            ],
-            key=lambda x: x[1].get("distance", float("inf")),
-        )[:k]
-        documents, metadatas = zip(*combined, strict=False) if combined else ([], [])
-
-    return list(documents), list(metadatas)
