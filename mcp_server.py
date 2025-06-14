@@ -112,13 +112,15 @@ class ReindexResponse(BaseModel):
     summary="Fetch code context",
     description="Retrieve code context based on a query, with optional metadata filtering.",
 )
-async def get_context(request: ContextRequest, api_key: str = Depends(verify_api_key)):
+async def get_context(
+    request: Request, payload: ContextRequest, api_key: str = Depends(verify_api_key)
+):
     try:
         result = searcher.context(
-            request.query,
+            payload.query,
             k=5,
-            max_tokens=request.max_tokens,
-            metadata_filter=request.metadata_filter,
+            max_tokens=payload.max_tokens,
+            metadata_filter=payload.metadata_filter,
         )
         return {
             "content": result["content"],
@@ -142,14 +144,14 @@ async def get_context(request: ContextRequest, api_key: str = Depends(verify_api
     description="Search for code snippets with optional metadata filtering.",
 )
 async def search_context(
-    request: ContextRequest, api_key: str = Depends(verify_api_key)
+    request: Request, payload: ContextRequest, api_key: str = Depends(verify_api_key)
 ):
     try:
         result = searcher.context(
-            request.query,
+            payload.query,
             k=5,
-            max_tokens=request.max_tokens,
-            metadata_filter=request.metadata_filter,
+            max_tokens=payload.max_tokens,
+            metadata_filter=payload.metadata_filter,
         )
         return {
             "results": [
@@ -165,6 +167,7 @@ async def search_context(
         }
     except Exception as e:
         logger.error(f"Search failed: {e}")
+
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
 
 
