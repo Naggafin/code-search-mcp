@@ -7,6 +7,8 @@ from mcp_search import Indexer, Searcher
 
 
 def create_dummy_repo(tmp: Path):
+    tmp.mkdir(parents=True, exist_ok=True)
+
     src = tmp / "foo.py"
     src.write_text('def add(a, b):\n    """Return sum"""\n    return a + b\n')
 
