@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable, Optional, Union, List
+from typing import Iterable, List, Optional, Union
 
 import libcst as cst
 from libcst import metadata as _cst_meta
+
 # Optional libmagic support
 try:
     import magic  # type: ignore
+
     _magic = magic.Magic(mime=True)  # type: ignore
 except ImportError:  # pragma: no cover
     _magic = None
@@ -25,6 +27,7 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 # Helper to get mime type if libmagic available
 
+
 def _get_mime(path: Path) -> str:
     if _magic is None:
         return ""
@@ -34,10 +37,9 @@ def _get_mime(path: Path) -> str:
         return ""
 
 
-
-
 # ---------------------------------------------------------------------------
 # Python (libcst) extraction -------------------------------------------------
+
 
 class _PyVisitor(cst.CSTVisitor):
     METADATA_DEPENDENCIES = (_cst_meta.PositionProvider,)
@@ -143,12 +145,15 @@ def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
         )
     return chunks
 
+
 # ---------------------------------------------------------------------------
 # Public API ----------------------------------------------------------------
+
 
 def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
     """Return list of code chunks extracted from *file_path* contents."""
     chunks: list[dict] = []
+    # TODO: could have potentially more robust file type checking using libmagic
     if file_path.suffix == ".py":
         chunks = _extract_python(code)
     if not chunks:

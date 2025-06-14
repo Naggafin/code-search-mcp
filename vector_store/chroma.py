@@ -1,4 +1,5 @@
 """ChromaDB implementation of VectorStore interface."""
+
 from __future__ import annotations
 
 import uuid
@@ -15,9 +16,15 @@ class ChromaVectorStore(VectorStore):
     def __init__(self, db_path: Path | str | None = None) -> None:
         path = Path(db_path) if db_path else Path(".chroma_db")
         path.mkdir(exist_ok=True)
-        client = chromadb.PersistentClient(path=str(path), settings=Settings(allow_reset=True))
-        self._code = client.get_or_create_collection(name="code_collection", metadata={"hnsw:space": "cosine"})
-        self._text = client.get_or_create_collection(name="text_collection", metadata={"hnsw:space": "cosine"})
+        client = chromadb.PersistentClient(
+            path=str(path), settings=Settings(allow_reset=True)
+        )
+        self._code = client.get_or_create_collection(
+            name="code_collection", metadata={"hnsw:space": "cosine"}
+        )
+        self._text = client.get_or_create_collection(
+            name="text_collection", metadata={"hnsw:space": "cosine"}
+        )
 
     def _split(
         self,
@@ -59,7 +66,12 @@ class ChromaVectorStore(VectorStore):
             text_ids,
         )
 
-    def add(self, chunks: Iterable[Tuple[str, dict]], embeddings: List[List[float]], batch_size: int = 100) -> None:
+    def add(
+        self,
+        chunks: Iterable[Tuple[str, dict]],
+        embeddings: List[List[float]],
+        batch_size: int = 100,
+    ) -> None:
         (
             c_embs,
             c_docs,

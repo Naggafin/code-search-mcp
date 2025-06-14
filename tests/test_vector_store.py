@@ -4,8 +4,9 @@ from pathlib import Path
 import pytest
 
 try:
-    from vector_store.chroma import ChromaVectorStore
     import chromadb  # noqa: F401
+
+    from vector_store.chroma import ChromaVectorStore
 except ImportError:  # pragma: no cover
     ChromaVectorStore = None  # type: ignore
 

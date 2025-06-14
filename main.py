@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 
 import uvicorn
-from mcp_search import Indexer
 from tqdm import tqdm
+
+from mcp_search import Indexer
 
 # MCP-compliant logging
 logging.basicConfig(
@@ -76,10 +77,14 @@ def main():
                 pbar.update(1)
 
             if args.action == "reindex":
-                Indexer(args.project_path).index_incremental(progress_callback=progress_callback)
+                Indexer(args.project_path).index_incremental(
+                    progress_callback=progress_callback
+                )
                 logger.info("Incremental indexing completed successfully.")
             elif args.action == "index":
-                Indexer(args.project_path).index_full(progress_callback=progress_callback)
+                Indexer(args.project_path).index_full(
+                    progress_callback=progress_callback
+                )
                 logger.info("Full indexing completed successfully.")
     except Exception as e:
         logger.error(f"Indexing failed: {e}")

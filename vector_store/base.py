@@ -1,4 +1,5 @@
 """Abstract base definitions for vector store backends."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -9,7 +10,9 @@ class VectorStore(ABC):
     """Base interface for pluggable vector databases."""
 
     @abstractmethod
-    def add(self, chunks: Iterable[Tuple[str, dict]], embeddings: List[List[float]]) -> None:  # noqa: D401 E501
+    def add(
+        self, chunks: Iterable[Tuple[str, dict]], embeddings: List[List[float]]
+    ) -> None:  # noqa: D401 E501
         """Add *chunks* with corresponding *embeddings* to the store."""
 
     @abstractmethod

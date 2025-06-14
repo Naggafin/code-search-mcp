@@ -1,10 +1,11 @@
 import logging
 from pathlib import Path
 
-from auth import verify_api_key
-from config import settings
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+from auth import verify_api_key
+from config import settings
 from mcp_search import Indexer, Searcher
 from token_counter import count_tokens
 

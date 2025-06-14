@@ -141,6 +141,10 @@ def is_probably_code(file_path: Path, mime_detector) -> bool:
 
 
 def embed(chunks, batch_size=32):
+    # TODO: this function may need to be refactored to return a dict of 2 lists for organization
+    # so, for example: {'code': [...], 'text': [...]}. in this way, we store code and text embeddings
+    # separately and in an organized manner.
+
     if not MODEL_AVAILABLE:
         raise RuntimeError("Models unavailable. Install required packages.")
 

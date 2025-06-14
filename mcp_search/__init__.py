@@ -5,12 +5,12 @@ Provides thin `Indexer` and `Searcher` classes that wrap the existing
 vector search without running the HTTP service.  This keeps the public
 surface area small while allowing the underlying implementation to evolve.
 """
+
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Callable, Optional, Any, Dict
-
 import importlib
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional
 
 # Re-export version for clients that want to pin behaviour
 __version__ = "0.9.0"
@@ -18,11 +18,13 @@ __version__ = "0.9.0"
 # Lazy import to avoid heavy deps (transformers) until actually needed
 _se: Any | None = None
 
+
 def _lazy_search_engine():
     global _se
     if _se is None:
         _se = importlib.import_module("search_engine")
     return _se
+
 
 __all__ = [
     "Indexer",
@@ -38,16 +40,26 @@ class Indexer:
         self.project_path = Path(project_path).resolve()
 
     # ----------------------------------------------------- public API
-    def index_full(self, progress_callback: Optional[Callable[[], None]] = None) -> None:
+    def index_full(
+        self, progress_callback: Optional[Callable[[], None]] = None
+    ) -> None:
         """Index *all* files under ``project_path``."""
         try:
-            _lazy_search_engine().index_project(self.project_path, progress_callback=progress_callback)
+            _lazy_search_engine().index_project(
+                self.project_path, progress_callback=progress_callback
+            )
         except ImportError as exc:
-            raise RuntimeError("search_engine dependencies missing; install 'code-search-mcp[models]' or skip tests.") from exc
+            raise RuntimeError(
+                "search_engine dependencies missing; install 'code-search-mcp[models]' or skip tests."
+            ) from exc
 
-    def index_incremental(self, progress_callback: Optional[Callable[[], None]] = None) -> None:
+    def index_incremental(
+        self, progress_callback: Optional[Callable[[], None]] = None
+    ) -> None:
         """Index only files that changed since the last run."""
-        _lazy_search_engine().index_project_incremental(self.project_path, progress_callback=progress_callback)
+        _lazy_search_engine().index_project_incremental(
+            self.project_path, progress_callback=progress_callback
+        )
 
 
 class Searcher:
@@ -75,7 +87,9 @@ class Searcher:
                 metadata_filter=metadata_filter,
             )
         except ImportError as exc:
-            raise RuntimeError("search_engine dependencies missing; install 'code-search-mcp[models]' or skip tests.") from exc
+            raise RuntimeError(
+                "search_engine dependencies missing; install 'code-search-mcp[models]' or skip tests."
+            ) from exc
 
     def context(
         self,

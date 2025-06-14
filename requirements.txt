@@ -1,3 +1,4 @@
+# TODO: add any new requirements here
 chromadb
 fastapi
 langchain
@@ -12,4 +13,5 @@ tiktoken
 torch
 tqdm
 transformers
+tree-sitter
 uvicorn

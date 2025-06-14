@@ -2,12 +2,17 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from sentence_transformers import CrossEncoder
+from tqdm import tqdm
+
 from chunker import scan_project
 from embedder import embed
-from sentence_transformers import CrossEncoder
 from token_counter import count_tokens
-from tqdm import tqdm
-from vector_store import add_chunks, code_collection, text_collection
+from vector_store import (  # TODO: this should be using the new class ChromaVectorStore
+    add_chunks,
+    code_collection,
+    text_collection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +71,7 @@ def index_project(project_path, progress_callback=None):
     if all_chunks:
         chunk_iterator = tqdm(all_chunks, desc="Embedding chunks", leave=False)
         embeddings = embed(chunk_iterator)
-        add_chunks(all_chunks, embeddings)
+        add_chunks(all_chunks, embeddings)  # TODO: update with ChromaVectorStore
         logger.info(f"Indexed {len(all_chunks)} code chunks.")
     else:
         logger.info("No chunks to index.")
@@ -94,7 +99,7 @@ def index_project_incremental(project_path, progress_callback=None):
     if all_chunks:
         chunk_iterator = tqdm(all_chunks, desc="Embedding chunks", leave=False)
         embeddings = embed(chunk_iterator)
-        add_chunks(all_chunks, embeddings)
+        add_chunks(all_chunks, embeddings)  # TODO: update with ChromaVectorStore
         logger.info(f"Incrementally indexed {len(all_chunks)} code chunks.")
     else:
         logger.info("No changes detected.")
@@ -126,16 +131,21 @@ def search_code_hybrid(query_text, k=5, max_tokens=8000, metadata_filter=None):
 
     # Embed query using both models and query both collections
     def embed_query(text):
+        # TODO: possibly use a for loop here for code asthetics?
         code_emb = embed([text])[0][0]  # CodeBERT embedding
         text_emb = (
             embed([text])[0][0]
             if embed([text])[0][1] == "all-MiniLM-L6-v2"
             else embed([{"text": text, "metadata": {"path": "dummy.txt"}}])[0][0]
         )
-        return code_emb, text_emb
+        return (
+            code_emb,
+            text_emb,
+        )  # TODO: maybe return dict: {'code_emb': [...], 'text_emb': [...]}
 
     code_emb, text_emb = embed_query(query_text)
 
+    # TODO: maybe implememt results as a dict too: {'code_results': ..., 'text_results': ...}
     # Query both collections
     code_results = (
         code_collection.query(
