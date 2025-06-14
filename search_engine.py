@@ -2,17 +2,14 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from sentence_transformers import CrossEncoder
 from tqdm import tqdm
 
 from chunker import scan_project
 from embedder import embed
 from token_counter import count_tokens
-from vector_store import (  # TODO: this should be using the new class ChromaVectorStore
-    add_chunks,
-    code_collection,
-    text_collection,
-)
+from vector_store.chroma import ChromaVectorStore
+
+_STORE = ChromaVectorStore()
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +68,7 @@ def index_project(project_path, progress_callback=None):
     if all_chunks:
         chunk_iterator = tqdm(all_chunks, desc="Embedding chunks", leave=False)
         embeddings = embed(chunk_iterator)
-        add_chunks(all_chunks, embeddings)  # TODO: update with ChromaVectorStore
+        _STORE.add(all_chunks, embeddings)
         logger.info(f"Indexed {len(all_chunks)} code chunks.")
     else:
         logger.info("No chunks to index.")
@@ -99,7 +96,7 @@ def index_project_incremental(project_path, progress_callback=None):
     if all_chunks:
         chunk_iterator = tqdm(all_chunks, desc="Embedding chunks", leave=False)
         embeddings = embed(chunk_iterator)
-        add_chunks(all_chunks, embeddings)  # TODO: update with ChromaVectorStore
+        _STORE.add(all_chunks, embeddings)
         logger.info(f"Incrementally indexed {len(all_chunks)} code chunks.")
     else:
         logger.info("No changes detected.")
@@ -128,73 +125,30 @@ def context_aggregator(chunks, metadatas, max_tokens=8000):
 def search_code_hybrid(query_text, k=5, max_tokens=8000, metadata_filter=None):
     query_text = " ".join(query_text.lower().split())
     where_clause = metadata_filter if metadata_filter else None
+    # Embed query once and query store
+    query_emb = embed([(None, {"text": query_text, "metadata": {"path": "<query>"}})])[
+        0
+    ]
 
-    # Embed query using both models and query both collections
-    def embed_query(text):
-        # TODO: possibly use a for loop here for code asthetics?
-        code_emb = embed([text])[0][0]  # CodeBERT embedding
-        text_emb = (
-            embed([text])[0][0]
-            if embed([text])[0][1] == "all-MiniLM-L6-v2"
-            else embed([{"text": text, "metadata": {"path": "dummy.txt"}}])[0][0]
-        )
-        return (
-            code_emb,
-            text_emb,
-        )  # TODO: maybe return dict: {'code_emb': [...], 'text_emb': [...]}
-
-    code_emb, text_emb = embed_query(query_text)
-
-    # TODO: maybe implememt results as a dict too: {'code_results': ..., 'text_results': ...}
-    # Query both collections
-    code_results = (
-        code_collection.query(
-            query_embeddings=[code_emb], n_results=k, where=where_clause
-        )
-        if code_collection.count() > 0
-        else {"documents": [[]], "metadatas": [[]]}
-    )
-
-    text_results = (
-        text_collection.query(
-            query_embeddings=[text_emb], n_results=k, where=where_clause
-        )
-        if text_collection.count() > 0
-        else {"documents": [[]], "metadatas": [[]]}
-    )
-
-    # Combine results
-    documents = code_results["documents"][0] + text_results["documents"][0]
-    metadatas = code_results["metadatas"][0] + text_results["metadatas"][0]
+    documents, metadatas = _STORE.query(query_emb, k=k, where=where_clause)
 
     if not documents:
         return {"content": "", "metadata": [], "tokens": 0}
 
-    cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-    pairs = [[query_text, doc] for doc in documents]
-    scores = cross_encoder.predict(pairs)
-
-    ranked = sorted(
-        zip(scores, documents, metadatas, strict=False),
-        key=lambda x: x[0],
-        reverse=True,
-    )[:k]
-    ranked_docs = [doc for _, doc, _ in ranked]
-    ranked_metas = [meta for _, _, meta in ranked]
-
-    context, tokens = context_aggregator(ranked_docs, ranked_metas, max_tokens)
+    # Keep original order (Chroma already sorts by distance)
+    context, tokens = context_aggregator(documents, metadatas, max_tokens)
 
     return {
         "content": context,
         "metadata": [
             {
-                "path": m["path"],
-                "type": m["type"],
+                "path": m.get("path", "unknown"),
+                "type": m.get("type", "unknown"),
                 "name": m.get("name", ""),
-                "start_line": m["start_line"],
+                "start_line": m.get("start_line", 1),
                 "end_line": m.get("end_line", 1),
             }
-            for m in ranked_metas
+            for m in metadatas
         ],
         "tokens": tokens,
     }
