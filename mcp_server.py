@@ -104,6 +104,7 @@ class ReindexResponse(BaseModel):
     status: str
 
 
+@limiter.limit("60/minute")
 @app.post(
     "/mcp/v1/context",
     response_model=ContextResponse,
@@ -132,6 +133,7 @@ async def get_context(request: ContextRequest, api_key: str = Depends(verify_api
         ) from e
 
 
+@limiter.limit("60/minute")
 @app.post(
     "/mcp/v1/context/search",
     response_model=SearchResponse,
@@ -166,6 +168,7 @@ async def search_context(
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
 
 
+@limiter.limit("60/minute")
 @app.get(
     "/mcp/v1/context/stream",
     tags=["Context"],
@@ -216,6 +219,7 @@ async def stream_context(
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
 
 
+@limiter.limit("60/minute")
 @app.post(
     "/mcp/v1/context/file",
     response_model=FileResponse,

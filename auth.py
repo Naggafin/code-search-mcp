@@ -1,6 +1,6 @@
 from fastapi import Header, HTTPException
 
-from .config import settings
+from config import settings
 
 
 def verify_api_key(x_api_key: str = Header(...)):
