@@ -136,6 +136,7 @@ def search_code_hybrid(query_text, k=5, max_tokens=8000, metadata_filter=None):
         return {"content": "", "metadata": [], "tokens": 0}
 
     # Keep original order (Chroma already sorts by distance)
+    # NOTE: ranking may need to be performed for other vector stores
     context, tokens = context_aggregator(documents, metadatas, max_tokens)
 
     return {
