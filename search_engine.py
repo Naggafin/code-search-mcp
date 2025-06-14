@@ -115,11 +115,32 @@ def context_aggregator(chunks, metadatas, max_tokens=8000):
         start_line = meta.get("start_line", 1)
         end_line = meta.get("end_line", 1)
         name = meta.get("name", "")
-        content = f"File: {path}, Type: {code_type}, Name: {name}, Lines: {start_line}-{end_line}\n{chunk}\n"
+        content = (
+            f"File: {path}, Type: {code_type}, Name: {name}, "
+            f"Lines: {start_line}-{end_line}\n{chunk}\n"
+        )
         summary.append(content)
         total_tokens += chunk_tokens
 
     return "\n".join(summary), total_tokens
+
+
+def stream_code_chunks(query_text, k=5, max_tokens=8000, metadata_filter=None):
+    """Yield (chunk, metadata) pairs incrementally until token budget is exhausted."""
+    query_text = " ".join(query_text.lower().split())
+    where_clause = metadata_filter if metadata_filter else None
+    query_emb = embed([(None, {"text": query_text, "metadata": {"path": "<query>"}})])[
+        0
+    ]
+    documents, metadatas = _STORE.query(query_emb, k=k, where=where_clause)
+
+    total_tokens = 0
+    for chunk, meta in zip(documents, metadatas, strict=False):
+        tokens = count_tokens(chunk)
+        if total_tokens + tokens > max_tokens:
+            break
+        total_tokens += tokens
+        yield chunk, meta, total_tokens
 
 
 def search_code_hybrid(query_text, k=5, max_tokens=8000, metadata_filter=None):

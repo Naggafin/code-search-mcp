@@ -126,13 +126,15 @@ class Searcher:
         """
         from .utils import sse_event
 
-        result = self.context(
+        se = _lazy_search_engine()
+        total_tokens = 0
+        for chunk, meta, total_tokens in se.stream_code_chunks(
             query,
             k=k,
             max_tokens=max_tokens,
             metadata_filter=metadata_filter,
-        )
-        # full payload first
-        yield sse_event("result", result)
-        # terminal event so clients know the stream is complete
-        yield sse_event("end", {"status": "done"})
+        ):
+            yield sse_event("chunk", {"content": chunk, "metadata": meta})
+
+        # summary event when done
+        yield sse_event("end", {"tokens": total_tokens})
