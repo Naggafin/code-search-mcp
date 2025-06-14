@@ -5,7 +5,7 @@ from auth import verify_api_key
 from config import settings
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from search_engine import index_project_incremental, search_code_hybrid
+from mcp_search import Indexer, Searcher
 from token_counter import count_tokens
 
 BASE_DIR = Path(settings.project_path)
@@ -13,6 +13,9 @@ BASE_DIR = Path(settings.project_path)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
+
+searcher = Searcher()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -81,7 +84,7 @@ class ReindexResponse(BaseModel):
 )
 async def get_context(request: ContextRequest, api_key: str = Depends(verify_api_key)):
     try:
-        result = search_code_hybrid(
+        result = searcher.context(
             request.query,
             k=5,
             max_tokens=request.max_tokens,
@@ -111,7 +114,7 @@ async def search_context(
     request: ContextRequest, api_key: str = Depends(verify_api_key)
 ):
     try:
-        result = search_code_hybrid(
+        result = searcher.context(
             request.query,
             k=5,
             max_tokens=request.max_tokens,
@@ -169,7 +172,7 @@ async def get_file(request: FileRequest, api_key: str = Depends(verify_api_key))
 )
 async def reindex(api_key: str = Depends(verify_api_key)):
     try:
-        index_project_incremental(BASE_DIR)
+        Indexer(BASE_DIR).index_incremental()
         return {"status": "reindexed"}
     except Exception as e:
         logger.error(f"Reindex failed: {e}")
