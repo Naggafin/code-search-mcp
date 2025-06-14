@@ -15,3 +15,7 @@ tqdm
 transformers
 tree-sitter
 uvicorn
+httpx
+pytest-asyncio
+slowapi
+

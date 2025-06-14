@@ -18,8 +18,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-searcher = Searcher()
-logger = logging.getLogger(__name__)
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+# Register default handler
+from slowapi.middleware import SlowAPIMiddleware
 
 app = FastAPI(
     title="MCP Code Search Server",
@@ -34,6 +40,23 @@ app = FastAPI(
         {"name": "Reindex", "description": "Endpoints for reindexing the codebase."},
     ],
 )
+
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+searcher = Searcher()
+
+# ----------------------------- rate limiting
+from fastapi.responses import PlainTextResponse
+
+# Register rate-limit exceeded handler
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):  # noqa: D401
+    """Return plain-text rate-limit response."""
+    return PlainTextResponse(str(exc.detail), status_code=429)
 
 
 class ContextRequest(BaseModel):
