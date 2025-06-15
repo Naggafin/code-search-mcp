@@ -39,8 +39,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from code_search_mcp.config import settings  # Example based on actual imports
-from code_search_mcp.mcp_search import Searcher  # Updated for new structure
+from code_search_mcp.mcp_search import Searcher
 
 # --------------------------------------------------------------------------- helpers
 

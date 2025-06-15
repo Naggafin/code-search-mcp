@@ -3,8 +3,12 @@ from pathlib import Path
 
 from auth import verify_api_key
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from starlette.requests import Request
 from token_counter import count_tokens
 
@@ -18,14 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-
 limiter = Limiter(key_func=get_remote_address)
-
-# Register default handler
-from slowapi.middleware import SlowAPIMiddleware
 
 app = FastAPI(
     title="MCP Code Search Server",
@@ -44,13 +41,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
-
 searcher = Searcher()
-
-# ----------------------------- rate limiting
-from fastapi.responses import PlainTextResponse
-
-# Register rate-limit exceeded handler
 
 
 @app.exception_handler(RateLimitExceeded)
@@ -80,9 +71,6 @@ class ContextResponse(BaseModel):
     metadata: list[dict]
     tokens: int
     status: str
-
-
-from starlette.requests import Request
 
 
 class SearchResponse(BaseModel):

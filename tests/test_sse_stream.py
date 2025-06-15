@@ -2,8 +2,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-import code_search_mcp.mcp_server as mcp_server
-from code_search_mcp.mcp_server import stream_context
+from code_search_mcp import mcp_server
 
 
 @pytest.mark.asyncio

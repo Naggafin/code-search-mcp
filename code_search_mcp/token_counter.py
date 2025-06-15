@@ -1,6 +1,6 @@
 import logging
 
-from code_search_mcp import tiktoken
+import tiktoken
 
 logger = logging.getLogger(__name__)
 

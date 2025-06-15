@@ -2,12 +2,12 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from embedder import embed
-from token_counter import count_tokens
 from tqdm import tqdm
 
-from code_search_mcp.chunker import extract_code_chunks, scan_project
-from code_search_mcp.vector_store.base import VectorStore
+from code_search_mcp.chunker import scan_project
+from code_search_mcp.embedder import embed
+from code_search_mcp.token_counter import count_tokens
+from code_search_mcp.vector_store.chroma import ChromaVectorStore
 
 _STORE = ChromaVectorStore()
 

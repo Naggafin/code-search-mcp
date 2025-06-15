@@ -4,12 +4,9 @@ import os
 from pathlib import Path
 
 import uvicorn
-from mcp_search import Indexer
 from tqdm import tqdm
 
-from code_search_mcp.mcp_server import (  # Updated for new structure, adjust based on actual imports
-    app,
-)
+from code_search_mcp.mcp_search import Indexer
 
 # MCP-compliant logging
 logging.basicConfig(
@@ -95,6 +92,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    main()

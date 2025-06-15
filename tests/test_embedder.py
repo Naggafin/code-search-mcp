@@ -1,10 +1,6 @@
-# EDIT: Update import paths to reflect the new directory structure
 from pathlib import Path
 
-import pytest
-
-from code_search_mcp.embedder import embed  # Updated for new structure
-from code_search_mcp.embedder import is_probably_code
+from code_search_mcp.embedder import embed, is_probably_code
 
 
 def test_embed_function():
@@ -16,4 +12,4 @@ def test_embed_function():
 
 
 def test_is_probably_code():
-    assert is_probably_code(Path("/path/to/sample.py"), mime_detector=None) == True
+    assert is_probably_code(Path("/path/to/sample.py"), mime_detector=None)

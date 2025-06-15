@@ -9,12 +9,9 @@ from typing import Iterable, List, Tuple
 import chromadb
 from chromadb.config import Settings
 
-# EDIT: Update import paths to reflect the new directory structure
-from code_search_mcp.embedder import (  # Updated for new structure, adjust based on actual imports
-    embed,
-)
-
 from .base import VectorStore
+
+# EDIT: Update import paths to reflect the new directory structure
 
 
 class ChromaVectorStore(VectorStore):

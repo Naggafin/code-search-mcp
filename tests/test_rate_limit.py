@@ -1,8 +1,7 @@
-import httpx
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
-from code_search_mcp.mcp_server import get_context
+from code_search_mcp import mcp_server
 
 pytestmark = pytest.mark.xfail(
     reason="SlowAPI timing limitations under ASGITransport, to revisit"
@@ -25,7 +24,7 @@ async def test_rate_limit(monkeypatch):
         },
     )
 
-    transport = httpx.ASGITransport(app=mcp_server.app)
+    transport = ASGITransport(app=mcp_server.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Hit the endpoint 61 times
         for i in range(60):

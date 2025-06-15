@@ -1,8 +1,6 @@
 from pathlib import Path
 
-import pytest
-
-from code_search_mcp.chunker import TS_AVAILABLE, extract_code_chunks, scan_project
+from code_search_mcp.chunker import extract_code_chunks
 
 
 def test_python_extraction():
@@ -20,7 +18,6 @@ def test_python_extraction():
     assert names == ["Foo", "baz"], chunks
 
 
-@pytest.mark.skipif(not TS_AVAILABLE, reason="tree-sitter not available")
 def test_tree_sitter_extraction_js():
     js_code = (
         "function add(a, b) {\n"  # function

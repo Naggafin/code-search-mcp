@@ -1,22 +1,9 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
-try:
-    import chromadb  # noqa: F401
-
-    from code_search_mcp.vector_store.base import (  # Updated for new structure
-        VectorStore,
-    )
-    from code_search_mcp.vector_store.chroma import (  # Example based on actual imports
-        ChromaVectorStore,
-    )
-except ImportError:  # pragma: no cover
-    ChromaVectorStore = None  # type: ignore
+from code_search_mcp.vector_store.chroma import ChromaVectorStore
 
 
-@pytest.mark.skipif(ChromaVectorStore is None, reason="chromadb not available")
 def test_chroma_round_trip():
     with tempfile.TemporaryDirectory() as tmp:
         store = ChromaVectorStore(db_path=tmp)

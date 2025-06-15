@@ -5,12 +5,12 @@ from hashlib import md5
 from pathlib import Path
 from sqlite3 import OperationalError
 
-import magic  # No longer optional; will raise ImportError if not installed
+import magic
+import torch
 from pygments.lexers import guess_lexer
 from pygments.util import ClassNotFound
-
-from code_search_mcp.chunker import is_probably_code
-from code_search_mcp.token_counter import count_tokens
+from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +50,10 @@ KNOWN_CODE_EXTENSIONS = {
 DB_PATH = Path(".embed_cache/code_embeddings.db")
 DB_PATH.parent.mkdir(exist_ok=True)
 
-import torch
-from sentence_transformers import SentenceTransformer
-from transformers import AutoModel, AutoTokenizer
-
 CODE_TOKENIZER = AutoTokenizer.from_pretrained("microsoft/codebert-base")
 CODE_MODEL = AutoModel.from_pretrained("microsoft/codebert-base")
 CODE_MODEL.eval()
 TEXT_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
-MODEL_AVAILABLE = True
 
 
 def init_db():
@@ -107,6 +102,37 @@ def batch_generator(iterable, batch_size):
             batch = []
     if batch:
         yield batch
+
+
+def is_probably_code(
+    file_path: Path, mime_detector, suppress_errors: bool = True
+) -> bool:
+    try:
+        mime_type = mime_detector.from_file(str(file_path))
+
+        # 1. MIME type check
+        if mime_type.startswith(CODE_MIME_PREFIXES):
+            return True
+
+        # 2. Extension-based fallback
+        if file_path.suffix.lower() in KNOWN_CODE_EXTENSIONS:
+            return True
+
+        # 3. Pygments lexer-based detection from file content
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            guess_lexer(text)
+            return True
+        except UnicodeDecodeError as e:
+            logger.error(f"Can't decode {file_path}: {e}")
+            if suppress_errors:
+                return False
+            raise
+        except ClassNotFound:
+            return False
+
+    except Exception:
+        return False
 
 
 def embed(chunks, batch_size=32):

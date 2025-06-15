@@ -5,14 +5,10 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import libcst as cst
-import magic  # No longer optional; will raise ImportError if not installed
+import magic
 import pathspec
 from libcst import metadata as _cst_meta
-from tree_sitter_languages import (  # No longer optional; will raise ImportError if not installed
-    get_parser,
-)
-
-TS_AVAILABLE = True
+from tree_sitter_languages import get_parser
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +62,23 @@ class _PyVisitor(cst.CSTVisitor):
         self._add(node, "function", node.name.value)
 
 
+def _extract_python(code: str, file_path: Path) -> list[dict]:
+    """Chunk python *code* using libcst."""
+    try:
+        module = cst.parse_module(code)
+        wrapper = cst.MetadataWrapper(module)
+        visitor = _PyVisitor(code.splitlines())
+        wrapper.visit(visitor)
+        return visitor.chunks
+    except Exception as exc:  # pragma: no cover
+        logger.warning("libcst parse failed for %s: %s", file_path, exc)
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Tree-sitter extraction -----------------------------------------------------
 
+# TODO: Does tree-sitter support more languages than just these? Let's add them if so.
 SUPPORTED_LANGS = {
     ".js": "javascript",
     ".ts": "typescript",
@@ -76,12 +86,47 @@ SUPPORTED_LANGS = {
     ".java": "java",
 }
 
+# TODO: If you add more languages to SUPPORTED_LANGS, update LANG_NODE_TYPES as well.
 LANG_NODE_TYPES = {
     "javascript": ["function_declaration", "method_definition", "class_declaration"],
     "typescript": ["function_declaration", "method_definition", "class_declaration"],
     "go": ["function_declaration", "method_declaration"],
     "java": ["method_declaration", "class_declaration"],
 }
+
+
+def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
+    lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
+    if not lang:
+        return []
+
+    try:
+        parser = get_parser(lang)
+        tree = parser.parse(code.encode())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("tree-sitter parse failed for %s: %s", file_path, exc)
+        return []
+
+    chunks: list[dict] = []
+    for node in tree.root_node.walk():
+        if node.type not in LANG_NODE_TYPES[lang]:
+            continue
+        start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
+        text = code[node.start_byte : node.end_byte]
+        name_node = node.child_by_field_name("name")
+        name = name_node.text.decode() if name_node else "<anon>"
+        chunks.append(
+            {
+                "text": text,
+                "metadata": {
+                    "type": node.type,
+                    "name": name,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                },
+            }
+        )
+    return chunks
 
 
 # ---------------------------------------------------------------------------
@@ -92,46 +137,9 @@ def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
     """Return list of code chunks extracted from *file_path* contents."""
     chunks: list[dict] = []
     if file_path.suffix == ".py":
-        try:
-            module = cst.parse_module(code)
-            wrapper = cst.MetadataWrapper(module)
-            visitor = _PyVisitor(code.splitlines())
-            wrapper.visit(visitor)
-            chunks = visitor.chunks
-        except Exception as exc:  # pragma: no cover
-            logger.warning("libcst parse failed for %s: %s", file_path, exc)
-            chunks = []
-    if not chunks and TS_AVAILABLE:
-        lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
-        if lang:
-            try:
-                parser = get_parser(lang)
-                tree = parser.parse(code.encode())
-                chunks = []
-                for node in tree.root_node.walk():
-                    if node.type not in LANG_NODE_TYPES[lang]:
-                        continue
-                    start_line, end_line = (
-                        node.start_point[0] + 1,
-                        node.end_point[0] + 1,
-                    )
-                    text = code[node.start_byte : node.end_byte]
-                    name_node = node.child_by_field_name("name")
-                    name = name_node.text.decode() if name_node else "<anon>"
-                    chunks.append(
-                        {
-                            "text": text,
-                            "metadata": {
-                                "type": node.type,
-                                "name": name,
-                                "start_line": start_line,
-                                "end_line": end_line,
-                            },
-                        }
-                    )
-            except Exception as exc:  # pragma: no cover
-                logger.warning("tree-sitter parse failed for %s: %s", file_path, exc)
-                chunks = []
+        chunks = _extract_python(code, file_path)
+    if not chunks:
+        chunks = _extract_tree_sitter(code, file_path)
     if not chunks:
         lines = code.splitlines()
         chunks = [

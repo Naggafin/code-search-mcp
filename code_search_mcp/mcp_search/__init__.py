@@ -8,7 +8,6 @@ surface area small while allowing the underlying implementation to evolve.
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -111,12 +110,13 @@ class Searcher:
         """
 
         total_tokens = 0
-        for chunk, meta, total_tokens in search_engine.stream_code_chunks(
+        for chunk, meta, _total_tokens in search_engine.stream_code_chunks(
             query,
             k=k,
             max_tokens=max_tokens,
             metadata_filter=metadata_filter,
         ):
+            total_tokens += _total_tokens
             yield sse_event("chunk", {"content": chunk, "metadata": meta})
 
         # summary event when done

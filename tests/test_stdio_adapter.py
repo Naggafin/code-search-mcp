@@ -1,6 +1,6 @@
 import pytest
 
-import code_search_mcp.mcp_stdio as mcp_stdio
+from code_search_mcp import mcp_stdio
 
 
 class DummySearcher:

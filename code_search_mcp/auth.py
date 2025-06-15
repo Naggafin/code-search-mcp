@@ -1,11 +1,6 @@
-from config import settings
 from fastapi import Header, HTTPException
 
-# EDIT: Update import paths to reflect the new directory structure
-# Assuming this file has imports like from mcp_server or others, update to use code_search_mcp prefix
-from code_search_mcp.mcp_server import (  # Example; replace with actual imports if needed
-    some_function,
-)
+from code_search_mcp.config import settings
 
 
 def verify_api_key(x_api_key: str = Header(...)):

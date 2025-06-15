@@ -1,8 +1,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest  # noqa: F401
-
 from code_search_mcp.mcp_search import Indexer, Searcher
 
 
