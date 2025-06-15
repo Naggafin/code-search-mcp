@@ -1,4 +1,4 @@
-# TODO: add any new requirements here, which may be necessary as new libraries have been added to the imports
+
 chromadb
 fastapi
 langchain
@@ -14,7 +14,10 @@ torch
 tqdm
 transformers
 tree-sitter
+tree-sitter-languages
 uvicorn
 httpx
 pytest-asyncio
 slowapi
+starlette
+

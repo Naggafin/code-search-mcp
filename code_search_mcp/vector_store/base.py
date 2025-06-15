@@ -5,6 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, List, Tuple
 
+from code_search_mcp.embedder import (  # Updated for new structure, adjust based on actual imports
+    embed,
+)
+
 
 class VectorStore(ABC):
     """Base interface for pluggable vector databases."""

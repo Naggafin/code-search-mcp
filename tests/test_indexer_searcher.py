@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest  # noqa: F401
 
-from mcp_search import Indexer, Searcher
+from code_search_mcp.mcp_search import Indexer, Searcher
 
 
 def create_dummy_repo(tmp: Path):

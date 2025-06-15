@@ -1,15 +1,15 @@
 import logging
 from pathlib import Path
 
+from auth import verify_api_key
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.requests import Request
-
-from auth import verify_api_key
-from config import settings
-from mcp_search import Indexer, Searcher
 from token_counter import count_tokens
+
+from code_search_mcp.config import settings
+from code_search_mcp.mcp_search import Indexer, Searcher
 
 BASE_DIR = Path(settings.project_path)
 

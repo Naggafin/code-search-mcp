@@ -5,23 +5,12 @@ from hashlib import md5
 from pathlib import Path
 from sqlite3 import OperationalError
 
-# TODO: let's not make this optional; failure to import should be a runtime error
-try:
-    import magic
-except ImportError:  # Fallback stub when python-magic is not installed (e.g. CI)
-    import types
-
-    class _MagicStub:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def from_file(self, *_a, **_kw):
-            return "text/plain"
-
-    magic = types.SimpleNamespace(Magic=_MagicStub)
-
+import magic  # No longer optional; will raise ImportError if not installed
 from pygments.lexers import guess_lexer
 from pygments.util import ClassNotFound
+
+from code_search_mcp.chunker import is_probably_code
+from code_search_mcp.token_counter import count_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -61,23 +50,15 @@ KNOWN_CODE_EXTENSIONS = {
 DB_PATH = Path(".embed_cache/code_embeddings.db")
 DB_PATH.parent.mkdir(exist_ok=True)
 
-# TODO: let's not make these optional; failure to import should be a runtime error
-try:
-    import torch
-    from sentence_transformers import SentenceTransformer
-    from transformers import AutoModel, AutoTokenizer
+import torch
+from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
 
-    CODE_TOKENIZER = AutoTokenizer.from_pretrained("microsoft/codebert-base")
-    CODE_MODEL = AutoModel.from_pretrained("microsoft/codebert-base")
-    CODE_MODEL.eval()
-    TEXT_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
-    MODEL_AVAILABLE = True
-except ImportError:
-    MODEL_AVAILABLE = False
-    CODE_TOKENIZER, CODE_MODEL, TEXT_MODEL = None, None, None
-    logger.info(
-        "Models unavailable. Install `transformers`, `sentence-transformers`, `torch`."
-    )
+CODE_TOKENIZER = AutoTokenizer.from_pretrained("microsoft/codebert-base")
+CODE_MODEL = AutoModel.from_pretrained("microsoft/codebert-base")
+CODE_MODEL.eval()
+TEXT_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+MODEL_AVAILABLE = True
 
 
 def init_db():
@@ -128,51 +109,10 @@ def batch_generator(iterable, batch_size):
         yield batch
 
 
-def is_probably_code(
-    file_path: Path, mime_detector, suppress_errors: bool = True
-) -> bool:
-    try:
-        mime_type = mime_detector.from_file(str(file_path))
-
-        # 1. MIME type check
-        if mime_type.startswith(CODE_MIME_PREFIXES):
-            return True
-
-        # 2. Extension-based fallback
-        if file_path.suffix.lower() in KNOWN_CODE_EXTENSIONS:
-            return True
-
-        # 3. Pygments lexer-based detection from file content
-        try:
-            text = file_path.read_text(encoding="utf-8", errors="ignore")
-            guess_lexer(text)
-            return True
-        except UnicodeDecodeError as e:
-            logger.error(f"Can't decode {file_path}: {e}")
-            if suppress_errors:
-                return False
-            raise
-        except ClassNotFound:
-            return False
-
-    except Exception:
-        return False
-
-
 def embed(chunks, batch_size=32):
-    # TODO: this function may need to be refactored to return a dict of 2 lists for organization
-    # so, for example: {'code': [...], 'text': [...]}. in this way, we store code and text embeddings
-    # separately and in an organized manner.
-
-    # TODO: these check is no longer necessary, as it should now be that the model is always available, given that failure to import should result in a runtime error now.
-    if not MODEL_AVAILABLE:
-        # Fallback: return a deterministic dummy embedding (hash-based) so that
-        # indexing/search tests can run without heavy ML dependencies.
-        dummy_emb = lambda t: [((hash(t) >> i) & 0xFF) / 255.0 for i in range(32)]
-        return [dummy_emb(str(chunk[1]["text"])) for chunk in chunks]
-
     mime = magic.Magic(mime=True)
-    results = []
+    code_results = []
+    text_results = []
 
     for batch in batch_generator(chunks, batch_size):
         for file_path, chunk_data in batch:
@@ -189,7 +129,10 @@ def embed(chunks, batch_size=32):
             key = get_cache_key(text, model_name)
             cached = load_from_cache(key)
             if cached:
-                results.append(cached)
+                if model_name == "codebert-base":
+                    code_results.append(cached)
+                else:
+                    text_results.append(cached)
                 continue
 
             if model_name == "codebert-base":
@@ -199,10 +142,11 @@ def embed(chunks, batch_size=32):
                 with torch.no_grad():
                     output = CODE_MODEL(**tokens)
                     embedding = output.last_hidden_state.mean(dim=1).squeeze().tolist()
+                code_results.append(embedding)
             else:
                 embedding = TEXT_MODEL.encode(text, convert_to_tensor=False).tolist()
+                text_results.append(embedding)
 
             save_to_cache(key, text, embedding, model_name)
-            results.append(embedding)
 
-    return results
+    return {"code": code_results, "text": text_results}

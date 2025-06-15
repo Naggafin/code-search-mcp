@@ -2,39 +2,25 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import libcst as cst
-from libcst import metadata as _cst_meta
-
-# TODO: let's not make this optional; failure to import should be a runtime error
-# Optional libmagic support
-try:
-    import magic  # type: ignore
-
-    _magic = magic.Magic(mime=True)  # type: ignore
-except ImportError:  # pragma: no cover
-    _magic = None
+import magic  # No longer optional; will raise ImportError if not installed
 import pathspec
+from libcst import metadata as _cst_meta
+from tree_sitter_languages import (  # No longer optional; will raise ImportError if not installed
+    get_parser,
+)
 
-# TODO: let's not make this optional; failure to import should be a runtime error
-# Optional tree-sitter support
-try:
-    from tree_sitter_languages import get_parser  # type: ignore
-
-    TS_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    TS_AVAILABLE = False
+TS_AVAILABLE = True
 
 logger = logging.getLogger(__name__)
 
 
 # Helper to get mime type if libmagic available
 def _get_mime(path: Path) -> str:
-    if _magic is None:
-        return ""
     try:
-        return _magic.from_file(str(path))
+        return magic.from_file(str(path))
     except Exception:
         return ""
 
@@ -80,20 +66,6 @@ class _PyVisitor(cst.CSTVisitor):
         self._add(node, "function", node.name.value)
 
 
-### TODO: is it the best for code aesthetics having 3 separate functions here, 2 private and 1 public, for one goal? use your best judgment determine if this section should be refactored.
-def _extract_python(code: str, file_path: Path) -> list[dict]:
-    """Chunk python *code* using libcst."""
-    try:
-        module = cst.parse_module(code)
-        wrapper = cst.MetadataWrapper(module)
-        visitor = _PyVisitor(code.splitlines())
-        wrapper.visit(visitor)
-        return visitor.chunks
-    except Exception as exc:  # pragma: no cover
-        logger.warning("libcst parse failed for %s: %s", file_path, exc)
-        return []
-
-
 # ---------------------------------------------------------------------------
 # Tree-sitter extraction -----------------------------------------------------
 
@@ -112,44 +84,6 @@ LANG_NODE_TYPES = {
 }
 
 
-def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
-    if not TS_AVAILABLE:
-        return []
-
-    # TODO: maybe use mime introspection instead of relying on file extensions?
-    lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
-    if not lang:
-        return []
-
-    try:
-        parser = get_parser(lang)
-        tree = parser.parse(code.encode())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("tree-sitter parse failed for %s: %s", file_path, exc)
-        return []
-
-    chunks: list[dict] = []
-    for node in tree.root_node.walk():
-        if node.type not in LANG_NODE_TYPES[lang]:
-            continue
-        start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
-        text = code[node.start_byte : node.end_byte]
-        name_node = node.child_by_field_name("name")
-        name = name_node.text.decode() if name_node else "<anon>"
-        chunks.append(
-            {
-                "text": text,
-                "metadata": {
-                    "type": node.type,
-                    "name": name,
-                    "start_line": start_line,
-                    "end_line": end_line,
-                },
-            }
-        )
-    return chunks
-
-
 # ---------------------------------------------------------------------------
 # Public API ----------------------------------------------------------------
 
@@ -157,11 +91,47 @@ def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
 def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
     """Return list of code chunks extracted from *file_path* contents."""
     chunks: list[dict] = []
-    # TODO: could have potentially more robust file type checking using libmagic
     if file_path.suffix == ".py":
-        chunks = _extract_python(code, file_path)
-    if not chunks:
-        chunks = _extract_tree_sitter(code, file_path)
+        try:
+            module = cst.parse_module(code)
+            wrapper = cst.MetadataWrapper(module)
+            visitor = _PyVisitor(code.splitlines())
+            wrapper.visit(visitor)
+            chunks = visitor.chunks
+        except Exception as exc:  # pragma: no cover
+            logger.warning("libcst parse failed for %s: %s", file_path, exc)
+            chunks = []
+    if not chunks and TS_AVAILABLE:
+        lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
+        if lang:
+            try:
+                parser = get_parser(lang)
+                tree = parser.parse(code.encode())
+                chunks = []
+                for node in tree.root_node.walk():
+                    if node.type not in LANG_NODE_TYPES[lang]:
+                        continue
+                    start_line, end_line = (
+                        node.start_point[0] + 1,
+                        node.end_point[0] + 1,
+                    )
+                    text = code[node.start_byte : node.end_byte]
+                    name_node = node.child_by_field_name("name")
+                    name = name_node.text.decode() if name_node else "<anon>"
+                    chunks.append(
+                        {
+                            "text": text,
+                            "metadata": {
+                                "type": node.type,
+                                "name": name,
+                                "start_line": start_line,
+                                "end_line": end_line,
+                            },
+                        }
+                    )
+            except Exception as exc:  # pragma: no cover
+                logger.warning("tree-sitter parse failed for %s: %s", file_path, exc)
+                chunks = []
     if not chunks:
         lines = code.splitlines()
         chunks = [
@@ -176,9 +146,6 @@ def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
             }
         ]
     return chunks
-
-
-### ENDTODO
 
 
 def load_gitignore_patterns(project_path: Path) -> pathspec.PathSpec:
@@ -235,17 +202,13 @@ def is_text_file(file_path: Path) -> bool:
     return True
 
 
-# TODO: maybe add a return type hint here
 def scan_project(
     path: Path,
     suffixes: Optional[Union[str, Iterable[str]]] = None,
     suppress_errors: bool = True,
-):
+) -> Iterator[Tuple[Path, List[Dict[str, Any]]]]:
     if suffixes is None:
         suffixes = [""]  # Match all files
-    elif isinstance(suffixes, str):
-        suffixes = [suffixes]
-
     gitignore_spec = load_gitignore_patterns(path)
 
     for suffix in suffixes:
@@ -262,8 +225,22 @@ def scan_project(
                 continue
 
             try:
-                yield file, extract_code_chunks(file.read_text(), file)
+                with file.open("rb") as f:
+                    content_bytes = f.read()
+                mime_type = magic.from_buffer(content_bytes)
+                if mime_type.startswith("text/") or mime_type in (
+                    "application/json",
+                    "application/xml",
+                ):
+                    code_str = content_bytes.decode("utf-8", errors="replace")
+                    yield file, extract_code_chunks(code_str, file)
+                else:
+                    logger.debug(f"Skipping non-text file based on mime: {file}")
             except UnicodeDecodeError as e:
                 logger.error(f"Can't decode {file}: {e}")
+                if not suppress_errors:
+                    raise
+            except Exception as e:
+                logger.error(f"Error processing {file}: {e}")
                 if not suppress_errors:
                     raise

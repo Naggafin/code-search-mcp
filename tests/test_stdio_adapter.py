@@ -1,7 +1,6 @@
-
 import pytest
 
-import mcp_stdio
+import code_search_mcp.mcp_stdio as mcp_stdio
 
 
 class DummySearcher:
@@ -19,7 +18,7 @@ class DummySearcher:
 
 
 @pytest.fixture(autouse=True)
-def patch_searcher(monkeypatch):
+def mock_env(monkeypatch):
     monkeypatch.setattr(
         mcp_stdio, "Searcher", lambda project_path=None: DummySearcher()
     )

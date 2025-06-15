@@ -9,6 +9,11 @@ from typing import Iterable, List, Tuple
 import chromadb
 from chromadb.config import Settings
 
+# EDIT: Update import paths to reflect the new directory structure
+from code_search_mcp.embedder import (  # Updated for new structure, adjust based on actual imports
+    embed,
+)
+
 from .base import VectorStore
 
 
@@ -26,7 +31,6 @@ class ChromaVectorStore(VectorStore):
             name="text_collection", metadata={"hnsw:space": "cosine"}
         )
 
-    # TODO: if the TODO stub in embedder.py regarding changing the result output to a dict of {'code': ..., 'text': ...}, then this method needs to be updated to reflect that. ideally, it should also return a dict of similar structure.
     def _split(
         self,
         chunks: Iterable[Tuple[str, dict]],
@@ -67,7 +71,6 @@ class ChromaVectorStore(VectorStore):
             text_ids,
         )
 
-    # TODO: if the TODO stub in embedder.py regarding changing the result output to a dict of {'code': ..., 'text': ...}, then this method needs to be updated to reflect that
     def add(
         self,
         chunks: Iterable[Tuple[str, dict]],
@@ -110,9 +113,7 @@ class ChromaVectorStore(VectorStore):
             if self._text.count() > 0
             else {"documents": [[]], "metadatas": [[]]}
         )
-        docs = code_res["documents"][0] + text_res["documents"][0]
-        metas = code_res["metadatas"][0] + text_res["metadatas"][0]
-        return docs, metas
+        return {"code": code_res, "text": text_res}
 
     def count(self) -> int:
         return self._code.count() + self._text.count()

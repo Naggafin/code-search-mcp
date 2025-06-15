@@ -6,7 +6,12 @@ import pytest
 try:
     import chromadb  # noqa: F401
 
-    from vector_store.chroma import ChromaVectorStore
+    from code_search_mcp.vector_store.base import (  # Updated for new structure
+        VectorStore,
+    )
+    from code_search_mcp.vector_store.chroma import (  # Example based on actual imports
+        ChromaVectorStore,
+    )
 except ImportError:  # pragma: no cover
     ChromaVectorStore = None  # type: ignore
 

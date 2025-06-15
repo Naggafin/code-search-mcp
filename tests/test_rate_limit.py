@@ -1,9 +1,8 @@
-
 import httpx
 import pytest
 from httpx import AsyncClient
 
-import mcp_server
+from code_search_mcp.mcp_server import get_context
 
 pytestmark = pytest.mark.xfail(
     reason="SlowAPI timing limitations under ASGITransport, to revisit"
