@@ -128,7 +128,9 @@ def batch_generator(iterable, batch_size):
         yield batch
 
 
-def is_probably_code(file_path: Path, mime_detector, suppress_errors: bool = True) -> bool:
+def is_probably_code(
+    file_path: Path, mime_detector, suppress_errors: bool = True
+) -> bool:
     try:
         mime_type = mime_detector.from_file(str(file_path))
 

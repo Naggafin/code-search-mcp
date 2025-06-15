@@ -60,9 +60,7 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):  # noqa
 
 
 class ContextRequest(BaseModel):
-    query: str = Field(
-        ..., description="Search query for code context."
-    )
+    query: str = Field(..., description="Search query for code context.")
     max_tokens: int = Field(
         8000, description="Maximum tokens for the response context."
     )

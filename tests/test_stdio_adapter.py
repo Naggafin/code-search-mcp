@@ -1,5 +1,3 @@
-import json
-from types import SimpleNamespace
 
 import pytest
 
@@ -16,13 +14,15 @@ class DummySearcher:
         return {"results": [1, 2, 3]}
 
     def stream_context(self, query, **kwargs):
-        yield "event: chunk\ndata: {\"content\": \"A\"}\n\n"
-        yield "event: end\ndata: {\"tokens\": 5}\n\n"
+        yield 'event: chunk\ndata: {"content": "A"}\n\n'
+        yield 'event: end\ndata: {"tokens": 5}\n\n'
 
 
 @pytest.fixture(autouse=True)
 def patch_searcher(monkeypatch):
-    monkeypatch.setattr(mcp_stdio, "Searcher", lambda project_path=None: DummySearcher())
+    monkeypatch.setattr(
+        mcp_stdio, "Searcher", lambda project_path=None: DummySearcher()
+    )
 
 
 def _handle(req):

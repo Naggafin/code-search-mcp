@@ -37,7 +37,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List
 
 from mcp_search import Searcher

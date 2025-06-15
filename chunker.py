@@ -176,7 +176,10 @@ def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
             }
         ]
     return chunks
+
+
 ### ENDTODO
+
 
 def load_gitignore_patterns(project_path: Path) -> pathspec.PathSpec:
     """Load .gitignore patterns from the project directory."""
