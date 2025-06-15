@@ -5,6 +5,7 @@ from hashlib import md5
 from pathlib import Path
 from sqlite3 import OperationalError
 
+# TODO: let's not make this optional; failure to import should be a runtime error
 try:
     import magic
 except ImportError:  # Fallback stub when python-magic is not installed (e.g. CI)
@@ -60,6 +61,7 @@ KNOWN_CODE_EXTENSIONS = {
 DB_PATH = Path(".embed_cache/code_embeddings.db")
 DB_PATH.parent.mkdir(exist_ok=True)
 
+# TODO: let's not make these optional; failure to import should be a runtime error
 try:
     import torch
     from sentence_transformers import SentenceTransformer
@@ -126,7 +128,7 @@ def batch_generator(iterable, batch_size):
         yield batch
 
 
-def is_probably_code(file_path: Path, mime_detector) -> bool:
+def is_probably_code(file_path: Path, mime_detector, suppress_errors: bool = True) -> bool:
     try:
         mime_type = mime_detector.from_file(str(file_path))
 
@@ -145,6 +147,8 @@ def is_probably_code(file_path: Path, mime_detector) -> bool:
             return True
         except UnicodeDecodeError as e:
             logger.error(f"Can't decode {file_path}: {e}")
+            if suppress_errors:
+                return False
             raise
         except ClassNotFound:
             return False
@@ -158,6 +162,7 @@ def embed(chunks, batch_size=32):
     # so, for example: {'code': [...], 'text': [...]}. in this way, we store code and text embeddings
     # separately and in an organized manner.
 
+    # TODO: these check is no longer necessary, as it should now be that the model is always available, given that failure to import should result in a runtime error now.
     if not MODEL_AVAILABLE:
         # Fallback: return a deterministic dummy embedding (hash-based) so that
         # indexing/search tests can run without heavy ML dependencies.

@@ -10,7 +10,7 @@ Protocol (MVP)
 --------------
 Input – one JSON object per line::
 
-    {"type": "context", "query": "paginate Django queryset", "max_tokens": 8000}
+    {"type": "context", "query": "paginate queryset", "max_tokens": 8000}
 
 Optional keys:
 * "stream": true -> stream chunk / end events.

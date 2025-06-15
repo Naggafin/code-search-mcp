@@ -2,6 +2,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# TODO: let's not make this optional; failure to import should be a runtime error
 try:
     import tiktoken
 
@@ -12,7 +13,4 @@ except ImportError:
 
 
 def count_tokens(text: str) -> int:
-    if TOKENIZER is None:
-        # Fallback: estimate tokens as 4 chars per token
-        return len(text) // 4
     return len(TOKENIZER.encode(text))

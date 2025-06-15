@@ -12,21 +12,11 @@ import importlib
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from . import search_engine
+from .utils import sse_event
+
 # Re-export version for clients that want to pin behaviour
 __version__ = "0.9.0"
-
-# Lazy import to avoid heavy deps (transformers) until actually needed
-_se: Any | None = None
-
-
-def _lazy_search_engine():
-    global _se
-    if _se is None:
-        _se = importlib.import_module("search_engine")
-    return _se
-
-
-from .utils import sse_event
 
 __all__ = [
     "Indexer",
@@ -48,7 +38,7 @@ class Indexer:
     ) -> None:
         """Index *all* files under ``project_path``."""
         try:
-            _lazy_search_engine().index_project(
+            search_engine.index_project(
                 self.project_path, progress_callback=progress_callback
             )
         except ImportError as exc:
@@ -60,7 +50,7 @@ class Indexer:
         self, progress_callback: Optional[Callable[[], None]] = None
     ) -> None:
         """Index only files that changed since the last run."""
-        _lazy_search_engine().index_project_incremental(
+        search_engine.index_project_incremental(
             self.project_path, progress_callback=progress_callback
         )
 
@@ -82,17 +72,12 @@ class Searcher:
         metadata_filter: Optional[dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Return raw ranked search results (no concatenation)."""
-        try:
-            return _lazy_search_engine().search_code_hybrid(
-                query_text=query,
-                k=k,
-                max_tokens=max_tokens,
-                metadata_filter=metadata_filter,
-            )
-        except ImportError as exc:
-            raise RuntimeError(
-                "search_engine dependencies missing; install 'code-search-mcp[models]' or skip tests."
-            ) from exc
+        return search_engine.search_code_hybrid(
+            query_text=query,
+            k=k,
+            max_tokens=max_tokens,
+            metadata_filter=metadata_filter,
+        )
 
     def context(
         self,
@@ -124,11 +109,9 @@ class Searcher:
         Currently emits a single ``result`` event followed by ``end``. Can be
         extended to chunk-level streaming without breaking contract.
         """
-        from .utils import sse_event
 
-        se = _lazy_search_engine()
         total_tokens = 0
-        for chunk, meta, total_tokens in se.stream_code_chunks(
+        for chunk, meta, total_tokens in search_engine.stream_code_chunks(
             query,
             k=k,
             max_tokens=max_tokens,

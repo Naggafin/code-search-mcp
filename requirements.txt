@@ -1,4 +1,4 @@
-# TODO: add any new requirements here
+# TODO: add any new requirements here, which may be necessary as new libraries have been added to the imports
 chromadb
 fastapi
 langchain
@@ -18,4 +18,3 @@ uvicorn
 httpx
 pytest-asyncio
 slowapi
-

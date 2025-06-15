@@ -7,6 +7,7 @@ from typing import Iterable, List, Optional, Union
 import libcst as cst
 from libcst import metadata as _cst_meta
 
+# TODO: let's not make this optional; failure to import should be a runtime error
 # Optional libmagic support
 try:
     import magic  # type: ignore
@@ -16,6 +17,7 @@ except ImportError:  # pragma: no cover
     _magic = None
 import pathspec
 
+# TODO: let's not make this optional; failure to import should be a runtime error
 # Optional tree-sitter support
 try:
     from tree_sitter_languages import get_parser  # type: ignore
@@ -25,9 +27,9 @@ except ImportError:  # pragma: no cover
     TS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
 # Helper to get mime type if libmagic available
-
-
 def _get_mime(path: Path) -> str:
     if _magic is None:
         return ""
@@ -49,7 +51,7 @@ class _PyVisitor(cst.CSTVisitor):
         self.chunks: list[dict] = []
         self._class_depth = 0
 
-    def _add(self, node: cst.CSTNode, typ: str, name: str):
+    def _add(self, node: cst.CSTNode, type: str, name: str):
         pos = self.get_metadata(_cst_meta.PositionProvider, node)
         start, end = pos.start.line, pos.end.line
         text = "\n".join(self._lines[start - 1 : end])
@@ -57,7 +59,7 @@ class _PyVisitor(cst.CSTVisitor):
             {
                 "text": text,
                 "metadata": {
-                    "type": typ,
+                    "type": type,
                     "name": name,
                     "start_line": start,
                     "end_line": end,
@@ -78,7 +80,8 @@ class _PyVisitor(cst.CSTVisitor):
         self._add(node, "function", node.name.value)
 
 
-def _extract_python(code: str) -> list[dict]:
+### TODO: is it the best for code aesthetics having 3 separate functions here, 2 private and 1 public, for one goal? use your best judgment determine if this section should be refactored.
+def _extract_python(code: str, file_path: Path) -> list[dict]:
     """Chunk python *code* using libcst."""
     try:
         module = cst.parse_module(code)
@@ -87,7 +90,7 @@ def _extract_python(code: str) -> list[dict]:
         wrapper.visit(visitor)
         return visitor.chunks
     except Exception as exc:  # pragma: no cover
-        logger.debug("libcst failed: %s", exc)
+        logger.warning("libcst parse failed for %s: %s", file_path, exc)
         return []
 
 
@@ -113,6 +116,7 @@ def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
     if not TS_AVAILABLE:
         return []
 
+    # TODO: maybe use mime introspection instead of relying on file extensions?
     lang = SUPPORTED_LANGS.get(file_path.suffix.lower())
     if not lang:
         return []
@@ -121,7 +125,7 @@ def _extract_tree_sitter(code: str, file_path: Path) -> list[dict]:
         parser = get_parser(lang)
         tree = parser.parse(code.encode())
     except Exception as exc:  # pragma: no cover
-        logger.debug("tree-sitter parse failed for %s: %s", file_path, exc)
+        logger.warning("tree-sitter parse failed for %s: %s", file_path, exc)
         return []
 
     chunks: list[dict] = []
@@ -155,7 +159,7 @@ def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
     chunks: list[dict] = []
     # TODO: could have potentially more robust file type checking using libmagic
     if file_path.suffix == ".py":
-        chunks = _extract_python(code)
+        chunks = _extract_python(code, file_path)
     if not chunks:
         chunks = _extract_tree_sitter(code, file_path)
     if not chunks:
@@ -172,7 +176,7 @@ def extract_code_chunks(code: str, file_path: Path) -> list[dict]:
             }
         ]
     return chunks
-
+### ENDTODO
 
 def load_gitignore_patterns(project_path: Path) -> pathspec.PathSpec:
     """Load .gitignore patterns from the project directory."""
@@ -228,6 +232,7 @@ def is_text_file(file_path: Path) -> bool:
     return True
 
 
+# TODO: maybe add a return type hint here
 def scan_project(
     path: Path,
     suffixes: Optional[Union[str, Iterable[str]]] = None,

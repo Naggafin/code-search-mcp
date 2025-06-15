@@ -29,7 +29,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 app = FastAPI(
     title="MCP Code Search Server",
-    description="MCP-compliant server for code search and context retrieval, supporting OpenHands for Django projects.",
+    description="MCP-compliant server for code search and context retrieval.",
     version="1.0.0",
     openapi_tags=[
         {
@@ -61,7 +61,7 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):  # noqa
 
 class ContextRequest(BaseModel):
     query: str = Field(
-        ..., description="Search query for code context (e.g., 'Django user model')."
+        ..., description="Search query for code context."
     )
     max_tokens: int = Field(
         8000, description="Maximum tokens for the response context."
